@@ -1,156 +1,122 @@
--- sports table
-CREATE TABLE sports (
-    id UUID DEFAULT UUID_STRING() PRIMARY KEY,
-    sports_code STRING NOT NULL UNIQUE,
-    name STRING NOT NULL,
-    metadata VARIANT,
-    created_at TIMESTAMP_TZ DEFAULT CURRENT_TIMESTAMP(),
-    updated_at TIMESTAMP_TZ
-);
--- Enable required extension for UUIDs
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ======================
--- SPORTS TABLE
--- ======================
+-- MASTER / REFERENCE
 DROP TABLE IF EXISTS sports CASCADE;
 CREATE TABLE sports (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     sports_code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    metadata JSON,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
 
--- ======================
--- TOURS TABLE
--- ======================
+-- CORE ENTITIES
 DROP TABLE IF EXISTS tours CASCADE;
 CREATE TABLE tours (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    sports_id UUID NOT NULL REFERENCES sports(id) ON DELETE CASCADE,
-    tour_code TEXT NOT NULL UNIQUE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
     name TEXT NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
 
--- ======================
--- TOUR YEARS TABLE
--- ======================
 DROP TABLE IF EXISTS tour_years CASCADE;
 CREATE TABLE tour_years (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    tour_id UUID NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
-    year INT NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ,
-    UNIQUE(tour_id, year)
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    tour_id UUID NOT NULL,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ
 );
 
--- ======================
--- EVENTS TABLE
--- ======================
 DROP TABLE IF EXISTS events CASCADE;
 CREATE TABLE events (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    tour_year_id UUID NOT NULL REFERENCES tour_years(id) ON DELETE CASCADE,
-    event_code TEXT NOT NULL UNIQUE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    tour_year_id UUID NOT NULL,
     name TEXT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    start_date TIMESTAMPTZ,
+    end_date TIMESTAMPTZ,
+    venue TEXT,
+    metadata JSON,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
 
--- ======================
--- TEAMS TABLE
--- ======================
 DROP TABLE IF EXISTS teams CASCADE;
 CREATE TABLE teams (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    sports_id UUID NOT NULL REFERENCES sports(id) ON DELETE CASCADE,
-    team_code TEXT NOT NULL UNIQUE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
     name TEXT NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    metadata JSON,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
 
--- ======================
--- PLAYERS TABLE
--- ======================
 DROP TABLE IF EXISTS players CASCADE;
 CREATE TABLE players (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
-    player_code TEXT NOT NULL UNIQUE,
-    first_name TEXT NOT NULL,
-    last_name TEXT,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    name TEXT NOT NULL,
+    date_of_birth TIMESTAMPTZ,
+    team_id UUID,
+    metadata JSON,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
 
--- ======================
--- EVENT PARTICIPANTS TABLE
--- ======================
+-- PARTICIPATION
 DROP TABLE IF EXISTS event_participants CASCADE;
 CREATE TABLE event_participants (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
-    player_id UUID REFERENCES players(id) ON DELETE SET NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ,
-    CHECK (
-        (team_id IS NOT NULL AND player_id IS NULL)
-        OR (team_id IS NULL AND player_id IS NOT NULL)
-    )
-);
-
--- ======================
--- ROUNDS TABLE
--- ======================
-DROP TABLE IF EXISTS rounds CASCADE;
-CREATE TABLE rounds (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    round_number INT NOT NULL,
-    name TEXT,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ,
-    UNIQUE(event_id, round_number)
-);
-
--- ======================
--- EVENT ROUNDS TABLE
--- ======================
-DROP TABLE IF EXISTS event_rounds CASCADE;
-CREATE TABLE event_rounds (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    round_id UUID NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
-    participant_id UUID NOT NULL REFERENCES event_participants(id) ON DELETE CASCADE,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    event_id UUID NOT NULL,
+    team_id UUID,
+    player_id UUID,
+    role TEXT,
+    metadata JSON,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
 
--- ======================
--- SCORES TABLE
--- ======================
+-- ROUNDS
+DROP TABLE IF EXISTS rounds CASCADE;
+CREATE TABLE rounds (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    round_no INT,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ
+);
+
+DROP TABLE IF EXISTS event_rounds CASCADE;
+CREATE TABLE event_rounds (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    event_id UUID NOT NULL,
+    round_id UUID NOT NULL,
+    parent_round_id UUID,
+    order_in_parent INT,
+    metadata JSON,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ
+);
+
+-- SCORES
 DROP TABLE IF EXISTS scores CASCADE;
 CREATE TABLE scores (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    event_round_id UUID NOT NULL REFERENCES event_rounds(id) ON DELETE CASCADE,
-    score_value NUMERIC NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sports_id UUID NOT NULL,
+    event_id UUID NOT NULL,
+    event_round_id UUID,
+    event_participant_id UUID NOT NULL,
+    metric_key TEXT NOT NULL,
+    metric_value JSON NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ
 );
