@@ -82,17 +82,6 @@ This applies all database migrations and creates the necessary tables.
 
 ---
 
-## ▶️ Running the Project
-
-Once the database is ready, you can start the project:
-
-```bash
-python main.py
-```
-
-*(replace `main.py` with your actual entrypoint if different)*
-
----
 
 ## 🔍 Verification
 
@@ -146,4 +135,5 @@ You should see the list of project tables.
 * Update `.env` if you need different credentials.
 
 ```
+
 
