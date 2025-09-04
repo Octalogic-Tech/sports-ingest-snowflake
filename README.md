@@ -141,8 +141,9 @@ You should see the list of project tables.
 
 ## 📘 Extra Notes
 
-* Raw SQL migrations (if any) are available in the `migrations/sql/` folder. These are **for reference only**.
+* Raw SQL migrations are available in the `migrations/sql/` folder. These are **for reference only**.
 * Use **SQLAlchemy + Alembic** for schema changes.
 * Update `.env` if you need different credentials.
 
 ```
+
