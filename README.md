@@ -1,139 +1,136 @@
-Got it 👍 Here’s the full **README.md** file you can copy-paste directly into your project.
+# Sports MVP – SuperMotocross Ingestion
 
----
+This project ingests Supercross/Motocross/SuperMotocross data into PostgreSQL. It discovers events by scraping the public events page, then fetches per‑event details and race results via the JSON endpoint, storing events, rounds, players, participants, and lap metrics.
 
-````markdown
-# Sports Ingest Snowflake
+## Prerequisites
 
-## 📦 Project Overview
-This project is designed to manage sports data ingestion into a **PostgreSQL** database.  
-It uses **SQLAlchemy** for ORM and **Alembic** for migrations, making schema evolution easier and more maintainable.  
-A **Dockerized PostgreSQL** setup is included for quick local development.  
+- Python 3.10+
+- Docker Desktop
 
----
+## Setup
 
-## 🛠️ Prerequisites
-Make sure you have the following installed before starting:
-
-- [Python 3.10+](https://www.python.org/downloads/)  
-- [Git](https://git-scm.com/downloads)  
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)  
-- [pip](https://pip.pypa.io/en/stable/) (comes with Python)  
-- [Virtualenv](https://pypi.org/project/virtualenv/) *(recommended)*  
-
----
-
-## ⚙️ Setup Instructions
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/Octalogic-Tech/sports-ingest-snowflake.git
-cd sports-ingest-snowflake
-````
-
-### 2. Create and activate a virtual environment
-
-```bash
+1) Create and activate a virtual environment, then install dependencies
+```powershell
 python -m venv .venv
-# On Windows PowerShell
-.venv\Scripts\activate
-# On Mac/Linux
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
+.\.venv\Scripts\activate
+pip install --upgrade pip wheel setuptools
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
-
-Create a `.env` file in the project root with the following content:
-
+2) Create `.env`
 ```env
-# Database configuration
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=sports
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=sports
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
 ```
 
----
-
-## 🗄️ Database Setup
-
-### 5. Start PostgreSQL using Docker
-
-```bash
+3) Start PostgreSQL
+```powershell
 docker-compose up -d
 ```
 
-This spins up a PostgreSQL container with the credentials from `.env`.
-
-### 6. Run Alembic migrations
-
-```bash
-alembic upgrade head
+4) Initialize schema (apply SQL migrations inside the container)
+```powershell
+docker exec -it sports_mvp_db psql -U postgres -d sports -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+docker exec -i sports_mvp_db psql -U postgres -d sports -f /migrations/20250902_001_init_schema.sql
+docker exec -i sports_mvp_db psql -U postgres -d sports -f /migrations/20250902_002_constraints.sql
+docker exec -i sports_mvp_db psql -U postgres -d sports -f /migrations/20250902_003_triggers.sql
+docker exec -i sports_mvp_db psql -U postgres -d sports -f /migrations/20250902_004_indexes.sql
+docker exec -i sports_mvp_db psql -U postgres -d sports -f /migrations/20250910_005_event_round_winner_and_scores_unique.sql
 ```
 
-This applies all database migrations and creates the necessary tables.
-
----
-
-
-## 🔍 Verification
-
-To check if the tables were created successfully:
-
-```bash
-docker exec -it sports_db psql -U postgres -d sports
-\dt
+5) Seed base data
+```powershell
+python -m app.cli seed
 ```
 
-You should see the list of project tables.
+## CLI Usage
 
----
+Run from project root with the venv activated.
 
-## 🚑 Troubleshooting
-
-* **Docker error: container already in use**
-  Stop old containers before restarting:
-
-  ```bash
-  docker-compose down && docker-compose up -d
-  ```
-
-* **Alembic migration failed**
-  Ensure your virtual environment is active and dependencies are installed:
-
-  ```bash
-  pip install -r requirements.txt
-  ```
-
-  If migrations are inconsistent, try resetting:
-
-  ```bash
-  alembic downgrade base
-  alembic upgrade head
-  ```
-
-* **Database not accessible**
-  Check if the container is running:
-
-  ```bash
-  docker ps
-  ```
-
----
-
-## 📘 Extra Notes
-
-* Raw SQL migrations are available in the `migrations/sql/` folder. These are **for reference only**.
-* Use **SQLAlchemy + Alembic** for schema changes.
-* Update `.env` if you need different credentials.
-
+- Discover events (HTML scrape)
+```powershell
+python -m app.cli scrape
 ```
+Expect a header like:
+```json
+{ "discovered_events": N, "unique_ids": M }
+```
+followed by the full list including `tournament_id` per event.
+
+- Ingest one event (full: players/participants/laps/winner)
+```powershell
+python -m app.cli ingest_event_full <EVENT_ID>
+```
+
+- Ingest a small batch (progress printed per event)
+```powershell
+python -m app.cli ingest_all --limit 5
+```
+
+- Ingest all visible events (with live progress)
+```powershell
+python -m app.cli ingest_all
+```
+Notes:
+- Ingest is idempotent; re‑runs update in place without duplicates.
+- Ctrl‑C prints a partial summary and exits cleanly.
+
+## What gets stored
+
+- `sports`, `tours`, `tour_years`, `events` (raw event JSON in `events.metadata`)
+- `rounds`, `event_rounds` (winner stored on `event_rounds.winner_event_participant_id` when detected)
+- `teams`, `players`, `event_participants` (teams created only if a name is present)
+- `scores` rows with `metric_key = 'race_lap'` containing per‑driver laps and `final_pos`
+
+## Example queries / spot checks (psql)
+
+- Counts
+```sql
+SELECT COUNT(*) FROM events;        -- expect ~number of ingested events
+SELECT COUNT(*) FROM rounds;        -- small normalized set (MAIN_EVENT/HEAT/LCQ/...)
+SELECT COUNT(*) FROM players;       -- drivers
+SELECT COUNT(*) FROM scores;        -- race_lap metrics
+```
+
+- Recent events
+```sql
+SELECT id, name, created_at FROM events ORDER BY created_at DESC LIMIT 5;
+```
+
+- Rounds in an event
+```sql
+SELECT r.code, r.name
+FROM event_rounds er JOIN rounds r ON r.id = er.round_id
+WHERE er.event_id = '<EVENT_UUID>'
+ORDER BY r.code;
+```
+
+- Sample laps / final positions
+```sql
+SELECT event_round_id, event_participant_id, metric_value->>'final_pos' AS final_pos
+FROM scores
+WHERE metric_key = 'race_lap'
+LIMIT 20;
+```
+
+## Troubleshooting
+
+- psycopg2 wheels on Windows/Python 3.12
+  - `pip install --upgrade pip wheel setuptools`
+  - `pip install psycopg2-binary==2.9.9` (or `pip install "psycopg[binary]"`)
+
+- Tables missing
+  - Re-apply SQL files (Setup step 4)
+
+- Port conflicts
+  - `docker-compose down -v && docker-compose up -d`
+
+## Notes
+
+- The events website is HTML; we discover event IDs by scraping anchors and extracting `tournament`/`id` query params.
+- Ingestion uses the JSON endpoint and adds retries/timeouts for resiliency.
 
 
