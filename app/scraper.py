@@ -46,13 +46,27 @@ def scrape_events() -> List[Dict]:
     events: List[Dict] = []
 
     # Broaden selectors in case markup differs
-    anchors = soup.select("a[href*='/events']")
+    # Collect anchors that are likely to point to specific events rather than the listing itself
+    anchors = []
+    selector_candidates = [
+        "a[href*='view_event']",
+        "a[href*='p=view_event']",
+        "a[href*='?id=']",
+        "a[href*='&id=']",
+        "a[href*='tournament=']",
+        "a[href*='/events/']",
+    ]
+    for sel in selector_candidates:
+        anchors.extend(soup.select(sel))
     seen = set()
     for a in anchors:
         href = a.get("href", "").strip()
         if not href:
             continue
         full_url = urllib.parse.urljoin(EVENTS_URL, href)
+        # Skip the listing page itself
+        if full_url.rstrip("/") == EVENTS_URL.rstrip("/"):
+            continue
         if full_url in seen:
             continue
         seen.add(full_url)
@@ -66,6 +80,30 @@ def scrape_events() -> List[Dict]:
 
     # Keep only those where we found an ID, but return all if none found
     with_ids = [e for e in events if e["tournament_id"] is not None]
-    return with_ids if with_ids else events
+    if with_ids:
+        return with_ids
+
+    # Fallback: scan all anchors' hrefs with regex when selectors miss
+    fallback_events: List[Dict] = []
+    seen_fallback = set()
+    for a in soup.find_all("a"):
+        href = a.get("href", "").strip()
+        if not href:
+            continue
+        full_url = urllib.parse.urljoin(EVENTS_URL, href)
+        if full_url in seen_fallback:
+            continue
+        seen_fallback.add(full_url)
+        tid = _extract_id_from_url(full_url)
+        if tid is None:
+            continue
+        title = a.get_text(strip=True) or full_url
+        fallback_events.append({
+            "title": title,
+            "url": full_url,
+            "tournament_id": tid,
+        })
+
+    return fallback_events if fallback_events else events
 
 
