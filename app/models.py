@@ -17,7 +17,6 @@ class Sport(Base):
 	meta = Column("metadata", JSON)
 	created_at = Column(TIMESTAMP(timezone=True), server_default=func.current_timestamp())
 	updated_at = Column(TIMESTAMP(timezone=True))
-
 	tours = relationship("Tour", back_populates="sport")
 
 # ---------- CORE ENTITIES ----------
@@ -28,7 +27,6 @@ class Tour(Base):
 	name = Column(Text, nullable=False)
 	created_at = Column(TIMESTAMP(timezone=True), server_default=func.current_timestamp())
 	updated_at = Column(TIMESTAMP(timezone=True))
-
 	sport = relationship("Sport", back_populates="tours")
 	years = relationship("TourYear", back_populates="tour")
 
