@@ -3,7 +3,7 @@ import json
 
 from app.db import SessionLocal
 from app.seed import seed_all
-from app.ingest import ingest_event, ingest_event_full, ingest_all_visible_events
+from app.ingest import ingest_event, ingest_event_full
 from app.scraper import scrape_events
 from app.smx_api import SmxApiClient
 
@@ -79,6 +79,7 @@ def main() -> None:
                     results.append(ingest_event_full(session, int(eid)))
                 except Exception as e:
                     results.append({"event_id": eid, "error": str(e)})
+                    session.rollback()
         print(json.dumps(results, indent=2))
         return
 
@@ -113,6 +114,7 @@ def main() -> None:
                     except Exception as ex:
                         err = {"event_id": eid, "url": url, "title": title, "error": str(ex)}
                         results.append(err)
+                        session.rollback()
                         processed += 1
                         print(json.dumps({"progress": f"{processed}/{total}", "error": err}, indent=2))
         except KeyboardInterrupt:

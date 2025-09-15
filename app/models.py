@@ -105,7 +105,6 @@ class EventRound(Base):
 	round_id = Column(UUID(as_uuid=True), ForeignKey("rounds.id"), nullable=False)
 	parent_round_id = Column(UUID(as_uuid=True), ForeignKey("event_rounds.id"))
 	order_in_parent = Column(Integer)
-	winner_event_participant_id = Column(UUID(as_uuid=True), ForeignKey("event_participants.id"))
 	meta = Column("metadata", JSON)
 	created_at = Column(TIMESTAMP(timezone=True), server_default=func.current_timestamp())
 	updated_at = Column(TIMESTAMP(timezone=True))
